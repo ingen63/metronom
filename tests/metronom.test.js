@@ -201,3 +201,10 @@ test('Auto: Schleife auch mit Unterteilung und 6/8', () => {
   m.play();
   assert.deepEqual(m.bpmTrace(40).slice(0, 4), [100, 105, 110, 100]);
 });
+
+test('Auto: 145 → 150, +5, alle 4 Takte – springt nach Takt 8 zurück', () => {
+  const m = load();
+  m.toggleAuto(); m.configureAuto({ start: 145, end: 150, stepIdx: 2, every: 4 });
+  m.play();
+  assert.deepEqual(m.bpmTrace(60).slice(0, 5), [145, 150, 145, 150, 145]);
+});
