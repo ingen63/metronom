@@ -428,7 +428,7 @@
     const a = state.auto;
     if (!a.on || bar % a.every !== 0) return;
     const step = STEPS[a.stepIdx];
-    if (state.bpm === a.end) return;
+    if (state.bpm === a.end) { if (a.start !== a.end) setBpm(a.start); return; }
     const next = a.end > state.bpm ? Math.min(a.end, state.bpm + step) : Math.max(a.end, state.bpm - step);
     setBpm(next);
   }

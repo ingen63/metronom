@@ -1,3 +1,4 @@
 Metronom.app/
 .DS_Store
 app/build/
+node_modules/
