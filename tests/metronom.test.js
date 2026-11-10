@@ -105,13 +105,13 @@ test('Auto aus: Tempo bleibt konstant', () => {
 test('Auto an (nicht spielend): Tempo springt auf Start-BPM', () => {
   const m = load();
   m.toggleAuto();
-  assert.equal(m.bpm(), 80);
+  assert.equal(m.bpm(), 100);
 });
 
 test('Auto: steigt alle 4 Takte um 5 BPM', () => {
   const m = load();
   m.toggleAuto(); m.play();
-  assert.deepEqual(m.bpmTrace(35).slice(0, 3), [80, 85, 90]);
+  assert.deepEqual(m.bpmTrace(35).slice(0, 3), [100, 105, 110]);
 });
 
 test('Auto: Intervall "alle N Takte" wird eingehalten', () => {

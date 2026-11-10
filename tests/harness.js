@@ -66,7 +66,7 @@ function load() {
     // Auto-Steigerung über die Oberfläche konfigurieren
     configureAuto({ start, end, stepIdx, every }) {
       const clickStep = (key, d) => document.querySelector(`.field[data-key="${key}"] .step[data-d="${d}"]`);
-      const cur = { start: 80, end: 140, step: 2, every: 4 };
+      const cur = { start: 100, end: 150, step: 2, every: 4 };
       const set = (key, from, to) => {
         const b = clickStep(key, to > from ? 1 : -1);
         for (let i = 0; i < Math.abs(to - from); i++) b.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true, cancelable: true }));
