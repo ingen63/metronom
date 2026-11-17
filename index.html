@@ -147,6 +147,13 @@
   .auto-toggle.on i { background: var(--blue); }
   .auto-fields { display: flex; gap: 18px; transition: opacity .2s; }
   .auto-fields.off { opacity: .35; }
+  .auto-mode {
+    height: 34px; padding: 0 8px; min-width: 54px;
+    background: #1f1f1f; border: 1px solid #3a3a3a; border-radius: 3px;
+    font-size: 10px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+  }
+  .auto-mode:hover { color: #aaa; }
+  .field.hidden { display: none; }
   .field { display: flex; flex-direction: column; align-items: center; width: 52px; }
   .field .lbl, .field .unit { font-size: 10px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
   .field .val {
@@ -280,11 +287,13 @@
     <button class="auto-toggle" id="autoToggle" title="Automatische Tempo-Steigerung ein/aus" aria-pressed="false">
       <i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i><i style="height:13px"></i><i style="height:16px"></i>
     </button>
+    <button class="auto-mode" id="autoMode" title="Variante: Schritte pro Takte oder Rampe über eine Dauer"></button>
     <div class="auto-fields off" id="autoFields">
       <div class="field" data-key="start"><span class="lbl">Start</span><button class="step" data-d="1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7 7 1 13 7"/></svg></button><span class="val"></span><button class="step" data-d="-1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1 7 7 13 1"/></svg></button><span class="unit">BPM</span></div>
       <div class="field" data-key="end"><span class="lbl">Ziel</span><button class="step" data-d="1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7 7 1 13 7"/></svg></button><span class="val"></span><button class="step" data-d="-1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1 7 7 13 1"/></svg></button><span class="unit">BPM</span></div>
       <div class="field" data-key="step"><span class="lbl">Plus</span><button class="step" data-d="1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7 7 1 13 7"/></svg></button><span class="val"></span><button class="step" data-d="-1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1 7 7 13 1"/></svg></button><span class="unit">BPM</span></div>
       <div class="field" data-key="every"><span class="lbl">Alle</span><button class="step" data-d="1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7 7 1 13 7"/></svg></button><span class="val"></span><button class="step" data-d="-1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1 7 7 13 1"/></svg></button><span class="unit">Takte</span></div>
+      <div class="field" data-key="minutes"><span class="lbl">Dauer</span><button class="step" data-d="1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 7 7 1 13 7"/></svg></button><span class="val"></span><button class="step" data-d="-1"><svg viewBox="0 0 14 8" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 1 7 7 13 1"/></svg></button><span class="unit">Min</span></div>
     </div>
   </div>
 
@@ -318,7 +327,7 @@
     sub: 1,
     volume: 0.7,
     playing: false,
-    auto: { on: false, start: 100, end: 150, stepIdx: 2, every: 4 },
+    auto: { on: false, mode: 'steps', start: 100, end: 150, stepIdx: 2, every: 4, minutes: 4 },
   };
 
   const $ = id => document.getElementById(id);
@@ -424,9 +433,21 @@
     }
   }
 
+  // Variante B: in a.minutes Minuten gleichmäßig in 1-BPM-Schritten von Start nach Ziel,
+  // Änderungen nur auf Taktgrenzen; danach Schleife zurück auf Start.
+  let rampStart = 0;
+  function applyRamp() {
+    const a = state.auto;
+    const frac = (nextTime - rampStart) / (a.minutes * 60);
+    if (frac >= 1) { rampStart = nextTime; setBpm(a.start); return; }
+    setBpm(a.start + frac * (a.end - a.start));
+  }
+
   function applyAutoIncrease() {
     const a = state.auto;
-    if (!a.on || bar % a.every !== 0) return;
+    if (!a.on) return;
+    if (a.mode === 'ramp') return applyRamp();
+    if (bar % a.every !== 0) return;
     const step = STEPS[a.stepIdx];
     if (state.bpm === a.end) { if (a.start !== a.end) setBpm(a.start); return; }
     const next = a.end > state.bpm ? Math.min(a.end, state.bpm + step) : Math.max(a.end, state.bpm - step);
@@ -438,6 +459,7 @@
     if (state.auto.on) setBpm(state.auto.start);
     beat = 0; subTick = 0; bar = 0;
     nextTime = ctx.currentTime + 0.06;
+    rampStart = nextTime;
     state.playing = true;
     schedule();
     timerId = setInterval(schedule, LOOKAHEAD_MS);
@@ -579,12 +601,16 @@
     end:   { get: () => state.auto.end,   set: v => state.auto.end   = clamp(v, MIN_BPM, MAX_BPM), fmt: v => v },
     step:  { get: () => state.auto.stepIdx, set: v => state.auto.stepIdx = clamp(v, 0, STEPS.length - 1), fmt: i => '+' + STEPS[i] },
     every: { get: () => state.auto.every, set: v => state.auto.every = clamp(v, 1, 20), fmt: v => v },
+    minutes: { get: () => state.auto.minutes, set: v => state.auto.minutes = clamp(v, 1, 60), fmt: v => v },
   };
+  const MODE_FIELDS = { steps: ['start', 'end', 'step', 'every'], ramp: ['start', 'end', 'minutes'] };
   function renderAuto() {
     document.querySelectorAll('.field').forEach(f => {
       const def = fieldDefs[f.dataset.key];
       f.querySelector('.val').textContent = def.fmt(def.get());
+      f.classList.toggle('hidden', !MODE_FIELDS[state.auto.mode].includes(f.dataset.key));
     });
+    $('autoMode').textContent = state.auto.mode === 'ramp' ? 'Zeit' : 'Takte';
     $('autoToggle').classList.toggle('on', state.auto.on);
     $('autoToggle').setAttribute('aria-pressed', state.auto.on);
     $('autoFields').classList.toggle('off', !state.auto.on);
@@ -594,6 +620,10 @@
     const change = d => { def.set(def.get() + d); renderAuto(); };
     f.querySelectorAll('.step').forEach(b => holdRepeat(b, () => change(+b.dataset.d)));
     dragWheel(f.querySelector('.val'), change);
+  });
+  $('autoMode').addEventListener('click', () => {
+    state.auto.mode = state.auto.mode === 'ramp' ? 'steps' : 'ramp';
+    renderAuto();
   });
   $('autoToggle').addEventListener('click', () => {
     state.auto.on = !state.auto.on;

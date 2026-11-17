@@ -208,3 +208,91 @@ test('Auto: 145 → 150, +5, alle 4 Takte – springt nach Takt 8 zurück', () =
   m.play();
   assert.deepEqual(m.bpmTrace(60).slice(0, 5), [145, 150, 145, 150, 145]);
 });
+
+// ---------- Auto-Steigerung, Variante B (Zeitrampe) ----------
+const ramp = (m, o) => { m.toggleAuto(); m.configureAuto({ mode: 'ramp', ...o }); };
+
+test('Rampe: Standard ist Variante A, Dauer 4 Minuten', () => {
+  const m = load();
+  assert.equal(m.$('autoMode').textContent, 'Takte');
+  m.$('autoMode').click();
+  assert.equal(m.$('autoMode').textContent, 'Zeit');
+  assert.equal(m.document.querySelector('.field[data-key="minutes"] .val').textContent, '4');
+});
+
+test('Rampe: Umschalten blendet die passenden Felder ein', () => {
+  const m = load();
+  const visible = () => [...m.document.querySelectorAll('.field')].filter(f => !f.classList.contains('hidden')).map(f => f.dataset.key);
+  assert.deepEqual(visible(), ['start', 'end', 'step', 'every']);
+  m.$('autoMode').click();
+  assert.deepEqual(visible(), ['start', 'end', 'minutes']);
+  m.$('autoMode').click();
+  assert.deepEqual(visible(), ['start', 'end', 'step', 'every']);
+});
+
+test('Rampe: 100 → 110 in 1 Minute in 1-BPM-Schritten, monoton', () => {
+  const m = load();
+  ramp(m, { start: 100, end: 110, minutes: 1 });
+  m.play();
+  const trace = m.bpmTrace(59);
+  assert.equal(trace[0], 100);
+  assert.equal(trace[trace.length - 1], 110);
+  for (let i = 1; i < trace.length; i++) assert.equal(trace[i] - trace[i - 1], 1, `Schritt ${i}`);
+});
+
+test('Rampe: Stufen gleichmäßig über die Dauer verteilt (≈6 s)', () => {
+  const m = load();
+  ramp(m, { start: 100, end: 110, minutes: 1 });
+  m.play();
+  const times = []; let last = m.bpm(); let t = 0;
+  m.advance(59, () => { t += 0.025; if (m.bpm() !== last) { times.push(t); last = m.bpm(); } });
+  assert.equal(times.length, 10);
+  for (let i = 1; i < times.length; i++) assert.ok(Math.abs(times[i] - times[i - 1] - 6) < 2.5, `Abstand ${i}: ${times[i] - times[i - 1]}`);
+});
+
+test('Rampe: nach Ablauf Schleife zurück auf Start und zweiter Durchlauf', () => {
+  const m = load();
+  ramp(m, { start: 100, end: 110, minutes: 1 });
+  m.play();
+  const trace = m.bpmTrace(130);
+  const i = trace.indexOf(110);
+  assert.equal(trace[i + 1], 100);
+  assert.ok(trace.indexOf(110, i + 1) > i + 1, 'zweiter Durchlauf erreicht wieder das Ziel');
+});
+
+test('Rampe: absteigend (Ziel < Start)', () => {
+  const m = load();
+  ramp(m, { start: 120, end: 110, minutes: 1 });
+  m.play();
+  const trace = m.bpmTrace(59);
+  assert.equal(trace[0], 120);
+  assert.equal(trace[trace.length - 1], 110);
+  for (let i = 1; i < trace.length; i++) assert.equal(trace[i] - trace[i - 1], -1);
+});
+
+test('Rampe: Start = Ziel hält das Tempo', () => {
+  const m = load();
+  ramp(m, { start: 100, end: 100, minutes: 1 });
+  m.play();
+  assert.deepEqual(m.bpmTrace(130), [100]);
+});
+
+test('Rampe: Start-BPM und Zeitbasis werden bei jedem Play neu gesetzt', () => {
+  const m = load();
+  ramp(m, { start: 100, end: 120, minutes: 1 });
+  m.play(); m.advance(30);
+  assert.ok(m.bpm() > 105);
+  m.play(); m.play();
+  assert.equal(m.bpm(), 100);
+  m.advance(2);
+  assert.ok(m.bpm() <= 101);
+});
+
+test('Rampe: zurück auf Variante A verhält sich wie bisher', () => {
+  const m = load();
+  m.toggleAuto();
+  m.$('autoMode').click(); m.$('autoMode').click();
+  m.configureAuto({ start: 100, end: 110, stepIdx: 2, every: 1 });
+  m.play();
+  assert.deepEqual(m.bpmTrace(30).slice(0, 4), [100, 105, 110, 100]);
+});
